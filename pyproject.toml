@@ -1,0 +1,21 @@
+[project]
+name = "evdm"
+version = "0.1.0"
+description = "A modern event based Spoken Dialog System framework"
+authors = [
+    {name = "Abhinav Tushar", email = "abhinav@lepisma.xyz"},
+]
+dependencies = [
+    "loguru>=0.7.2",
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "GPL-v3"}
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
