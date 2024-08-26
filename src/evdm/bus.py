@@ -3,9 +3,8 @@
 from enum import Enum
 from abc import abstractmethod, ABC
 import asyncio
-from dataclasses import dataclass
 from loguru import logger
-from datetime import datetime
+from evdm.events import Event
 
 
 class BusType(Enum):
@@ -17,17 +16,6 @@ class BusType(Enum):
     AudioSegments = 4
     AudioSignals = 5
     Devices = 6
-
-
-@dataclass
-class Event:
-    """Event that runs on the buses."""
-    created_on: datetime
-    data: dict
-
-
-def make_event(data: dict) -> Event:
-    return Event(datetime.now(), data)
 
 
 class Actor(ABC):

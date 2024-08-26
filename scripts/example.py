@@ -1,4 +1,5 @@
-from evdm.bus import HEB, Actor, Event, BusType, make_event
+from evdm.bus import HEB, Actor, BusType
+from evdm.events import Event, make_event
 import asyncio
 
 heb = HEB()
