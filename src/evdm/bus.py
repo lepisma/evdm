@@ -1,10 +1,10 @@
 """Event bus related functions."""
 
 from enum import Enum
-from abc import abstractmethod, ABC
 import asyncio
 from loguru import logger
 from evdm.events import Event
+from evdm.actors import Actor
 
 
 class BusType(Enum):
@@ -16,22 +16,6 @@ class BusType(Enum):
     AudioSegments = 4
     AudioSignals = 5
     Devices = 6
-
-
-class Actor(ABC):
-    """Abstract Actor class.
-
-    An actor subscribes for events from a bus and does some processing,
-    possibly resulting in emitting events to other buses.
-    """
-
-    @abstractmethod
-    async def act(self, event: Event, heb: "HEB"):
-        """Take `event` and do something with it.
-
-        After the compute is finished, optionally use heb to emit more messages.
-        """
-        raise NotImplementedError()
 
 
 class HEB:
