@@ -60,6 +60,8 @@ class HEB:
             BusType.Devices: []
         }
 
+        self._background_tasks: set[asyncio.Task] = set()
+
     async def put(self, event: Event, bus: BusType):
         """Push `event` on the bus.
 
@@ -68,10 +70,18 @@ class HEB:
         immediately passes the event to listening actors so they can act on it.
         """
         logger.debug(f"{event} on {bus}")
-        tasks: list[asyncio.Task] = []
+
         for listener in self.listeners[bus]:
             task = asyncio.create_task(listener.act(event, self))
-            tasks.append(task)
+            self._background_tasks.add(task)
+            task.add_done_callback(self._background_tasks.discard)
 
     def register(self, actor: Actor, listen_on: BusType):
+        """Register `actor` to listen on all events that come on given bus."""
+
         self.listeners[listen_on].append(actor)
+
+    async def close(self):
+        """Wait for all background tasks to finish before exiting."""
+
+        await asyncio.gather(*self._background_tasks)
