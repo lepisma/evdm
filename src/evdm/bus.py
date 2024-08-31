@@ -3,8 +3,6 @@
 import asyncio
 from enum import Enum
 
-from loguru import logger
-
 from evdm.events import Event
 
 
@@ -42,7 +40,6 @@ class HEB:
         event to the bus. As of now there is no buffer and every `put`
         immediately passes the event to listening actors so they can act on it.
         """
-        logger.debug(f"{event} on {bus}")
 
         for listener in self.listeners[bus]:
             task = asyncio.create_task(listener.act(event, self))

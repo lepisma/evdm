@@ -7,6 +7,7 @@ import numpy as np
 import sounddevice as sd
 import asyncio
 
+from loguru import logger
 
 class Actor(ABC):
     """Abstract Actor class.
@@ -22,6 +23,17 @@ class Actor(ABC):
         After the compute is finished, optionally use heb to emit more messages.
         """
         raise NotImplementedError()
+
+
+class DebugTap(Actor):
+    """Actor that reads events on a bus and logs events at DEBUG level."""
+
+    def __init__(self, bus: BusType) -> None:
+        super().__init__()
+        self.bus = bus
+
+    async def act(self, event, heb):
+        logger.debug(f"{event} on {self.bus}")
 
 
 class MicrophoneListener(Actor):
