@@ -9,6 +9,7 @@ import asyncio
 
 from loguru import logger
 
+
 class Actor(ABC):
     """Abstract Actor class.
 
@@ -71,32 +72,12 @@ class MicrophoneListener(Actor):
                 }), BusType.AudioSignals)
 
 
-class Transcriber(Actor):
-    """Actor that reads from AudioSignals and puts text chunks for utterances in
-    Texts bus. This uses offline whisper.
-    """
-
-    async def act(self, event, heb):
-        pass
-
-
-class SynthesizeAudio(Actor):
-    """Actor that takes events from Texts bus and puts audio chunks on
-    AudioSignals bus.
-    """
-
-    async def act(self, event, heb):
-        pass
-
-
-class Playback(Actor):
-    """Play audio from AudioSignals bus directly (without involving device
-    bus). As of now this accumulates audio chunks till utterance end, before
-    passing it for play.
+class SpeakerPlayer(Actor):
+    """Play audio from AudioSignals bus directly (without involving device bus)
+    without buffering.
     """
 
     def __init__(self) -> None:
-        self._buffer = []
         self.sr = None
 
     async def act(self, event, heb):
@@ -104,24 +85,32 @@ class Playback(Actor):
         Event's `data` structure is like the following:
 
         - `source`: Label for the source of this event.
-        - `seq`: Sequence number in current utterance. We ignore this for now
-           and assume that events are emitted in sequence with eou in the end.
-        - `utterance-id`: Utterance uuid.
-        - `is-eou`: Whether this is end of utterance.
         - `samples`: np.ndarray containing the audio samples.
         - `sr`: Sampling rate of the audio data.
         """
 
+        loop = asyncio.get_event_loop()
+        ev = asyncio.Event()
+        idx = 0
+
         self.sr = event.data["sr"]
-        self._buffer.append(event.data["samples"])
+        samples = event.data["samples"]
 
-        if event.data["is-eou"]:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(None, self.merge_and_play)
+        def _callback(outdata, frame_count, time_info, status):
+            nonlocal idx
+            remainder = len(samples) - idx
+            if remainder == 0:
+                loop.call_soon_threadsafe(ev.set)
+                raise sd.CallbackStop
+            valid_frames = frame_count if remainder >= frame_count else remainder
+            outdata[:valid_frames] = samples[idx:idx + valid_frames]
+            outdata[valid_frames:] = 0
+            idx += valid_frames
 
-    def merge_and_play(self):
-        """Merge chunks in buffer and play them."""
+        stream = sd.OutputStream(
+            callback=_callback,
+            channels=1
+        )
 
-        array = np.concatenate(self._buffer)
-        sd.play(array, self.sr)
-        self._buffer = []
+        with stream:
+            await ev.wait()

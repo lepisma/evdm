@@ -1,7 +1,7 @@
 version = 1
 requires-python = ">=3.11"
 
-[[package]]
+[[distribution]]
 name = "cffi"
 version = "1.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -46,7 +46,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/94/19/cf5baa07ee0f0e55eab7382459fbddaba0fdb0ba45973dd92556ae0d02db/cffi-1.17.0-cp313-cp313-win_amd64.whl", hash = "sha256:b7b6ea9e36d32582cda3465f54c4b454f62f23cb083ebc7a94e2ca6ef011c3a7", size = 181504 },
 ]
 
-[[package]]
+[[distribution]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -55,7 +55,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/d6/3965ed04c63042e047cb6a3e6ed1a63a35087b6a609aa3a15ed8ac56c221/colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6", size = 25335 },
 ]
 
-[[package]]
+[[distribution]]
 name = "evdm"
 version = "0.1.0"
 source = { editable = "." }
@@ -65,14 +65,7 @@ dependencies = [
     { name = "sounddevice" },
 ]
 
-[package.metadata]
-requires-dist = [
-    { name = "loguru", specifier = ">=0.7.2" },
-    { name = "numpy", specifier = ">=2.1.0" },
-    { name = "sounddevice", specifier = ">=0.5.0" },
-]
-
-[[package]]
+[[distribution]]
 name = "loguru"
 version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -85,7 +78,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/03/0a/4f6fed21aa246c6b49b561ca55facacc2a44b87d65b8b92362a8e99ba202/loguru-0.7.2-py3-none-any.whl", hash = "sha256:003d71e3d3ed35f0f8984898359d65b79e5b21943f78af86aa5491210429b8eb", size = 62549 },
 ]
 
-[[package]]
+[[distribution]]
 name = "numpy"
 version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -130,7 +123,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f4/51/c0dcadea0c281be5db32b29f7b977b17bdb53b7dbfcbc3b4f49288de8696/numpy-2.1.0-cp313-cp313t-musllinux_1_2_aarch64.whl", hash = "sha256:624884b572dff8ca8f60fab591413f077471de64e376b17d291b19f56504b2bb", size = 14135556 },
 ]
 
-[[package]]
+[[distribution]]
 name = "pycparser"
 version = "2.22"
 source = { registry = "https://pypi.org/simple" }
@@ -139,7 +132,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/13/a3/a812df4e2dd5696d1f351d58b8fe16a405b234ad2886a0dab9183fb78109/pycparser-2.22-py3-none-any.whl", hash = "sha256:c3702b6d3dd8c7abc1afa565d7e63d53a1d0bd86cdc24edd75470f4de499cfcc", size = 117552 },
 ]
 
-[[package]]
+[[distribution]]
 name = "sounddevice"
 version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -154,7 +147,7 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/bf/2a/58fa1704b5cf8041564337674790426d39d630e7407e54e17a1212332959/sounddevice-0.5.0-py3-none-win_amd64.whl", hash = "sha256:f28b7ef16f293d7b048a614dd087dfe39c3e313d94a50539bb52022b7ef27ece", size = 189785 },
 ]
 
-[[package]]
+[[distribution]]
 name = "win32-setctime"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
