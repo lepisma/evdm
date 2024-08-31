@@ -1,21 +1,15 @@
 [project]
 name = "evdm"
 version = "0.1.0"
-description = "A modern event based Spoken Dialog System framework"
-authors = [
-    {name = "Abhinav Tushar", email = "abhinav@lepisma.xyz"},
-]
+description = ""
+readme = "README.md"
+requires-python = ">=3.11"
 dependencies = [
+    "numpy>=2.1.0",
+    "sounddevice>=0.5.0",
     "loguru>=0.7.2",
 ]
-requires-python = ">=3.12"
-readme = "README.md"
-license = {text = "GPL-v3"}
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
-
-[tool.pdm]
-distribution = true
+requires = ["hatchling"]
+build-backend = "hatchling.build"
