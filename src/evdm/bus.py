@@ -1,10 +1,11 @@
 """Event bus related functions."""
 
-from enum import Enum
 import asyncio
+from enum import Enum
+
 from loguru import logger
+
 from evdm.events import Event
-from evdm.actors import Actor
 
 
 class BusType(Enum):
@@ -23,7 +24,7 @@ class HEB:
 
     def __init__(self):
         """Initialize buses and callbacks."""
-        self.listeners: dict[BusType, list[Actor]] = {
+        self.listeners: dict[BusType, list["Actor"]] = {
             BusType.Memory: [],
             BusType.Semantics: [],
             BusType.Texts: [],
@@ -48,7 +49,7 @@ class HEB:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
-    def register(self, actor: Actor, listen_on: BusType):
+    def register(self, actor: "Actor", listen_on: BusType):
         """Register `actor` to listen on all events that come on given bus."""
 
         self.listeners[listen_on].append(actor)
