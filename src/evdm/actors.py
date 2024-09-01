@@ -3,7 +3,6 @@
 from abc import abstractmethod, ABC
 from evdm.bus import BusType
 from evdm.events import Event, make_event
-import numpy as np
 import sounddevice as sd
 import asyncio
 
