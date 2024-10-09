@@ -12,11 +12,11 @@ class MicrophoneListener(Actor):
     bus) and puts events on the AudioSignals bus.
     """
 
-    def __init__(self, chunk_size: int = 50) -> None:
+    def __init__(self, chunk_size: int = 50, samplerate: int = 48_000) -> None:
         """`chunk_size` tells the size of each emitted chunk in ms. You could
         get a lower sized chunk when the source has stopped emitting audio.
         """
-        self.sr = 48_000
+        self.sr = samplerate
         self.chunk_size = chunk_size
 
     async def act(self, event, heb):
