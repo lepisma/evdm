@@ -11,6 +11,7 @@ dependencies = [
     "soundfile",
     "ollama>=0.3.2",
     "aioconsole>=0.8.0",
+    "websockets>=13.1",
 ]
 
 [build-system]
