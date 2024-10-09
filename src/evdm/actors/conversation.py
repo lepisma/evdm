@@ -6,6 +6,40 @@ from evdm.events import Event, make_event
 import ollama
 
 
+class BackchannelDetectorAgent(Actor):
+    """Agent that detects backchannel events on text bus and emits on semantics bus.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    async def act(self, event: Event, heb):
+        """There are the following kinds of backchannels that this detects (per speaker):
+
+        1. Interruptions that need the current speaker to yield.
+
+        2. Background events that need to be acknowledged but don't need to be
+           read as interruptions. They could be read as things that we need to do.
+
+        """
+
+        # Detect who all is currently speaking
+        # Run the detector on the partial text
+        # Emit the backchannel prediction on semantic bus
+        # This is complete specification for this actor
+
+        pass
+
+
+class ConversationalMemory(Actor):
+    """Memory for all conversation events. This saves all events from semantic
+    bus and superset utterances from text bus."""
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    async def act(self, event: Event, heb):
+        pass
 class LLMConversationAgent(Actor):
     """
     LLM Conversational Agent that responds to events from text bus.
