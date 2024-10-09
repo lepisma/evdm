@@ -189,7 +189,7 @@ class OpenAIRealtimeAgent(Actor):
             loop = asyncio.get_event_loop()
             samples = await loop.run_in_executor(None, lambda: _read(buffer))
 
-        samples = samples.astype(np.float32) / 32767
+        samples = samples.astype(np.float32)
         return samples.reshape(len(samples), 1) , sr
 
     async def act(self, event: Event, heb):
