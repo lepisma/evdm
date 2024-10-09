@@ -9,4 +9,6 @@ for more details.
 
 Although it's very simple and direct, you can play around with an example
 voicebot built using OpenAI's realtime API in the `./scripts/` directory. After
-`uv install`, run `uv run python ./scripts/example-oai-realtime.py`.
+`uv install`, run `uv run python ./scripts/example-oai-realtime.py`. Echo
+cancellation is not available yet so you should run this example with headphones
+on.
