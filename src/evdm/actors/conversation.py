@@ -40,6 +40,8 @@ class ConversationalMemory(Actor):
 
     async def act(self, event: Event, heb):
         pass
+
+
 class LLMConversationAgent(Actor):
     """
     LLM Conversational Agent that responds to events from text bus.
@@ -59,8 +61,14 @@ class LLMConversationAgent(Actor):
 
         - `source`: Label for the speaker
         - `text`: Text string from the utterance
-        - `is-eou`: Whether this is an EoU utterance
+        - `is-eou`: Whether this is an end of utterance
         """
+
+        # Listen to semantic bus
+        #
+        # If you are speaking and an interruption comes, stop (this agent is
+        # polite that way). This is only detected from the semantic bus and not
+        # via regular text bus.
 
         # Don't act on partial utterances for now
         if not event.data["is-eou"]:
