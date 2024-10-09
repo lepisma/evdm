@@ -29,7 +29,8 @@ class MicrophoneListener(Actor):
         stream = sd.InputStream(
             callback=_callback,
             channels=1,
-            blocksize=int((self.chunk_size / 1000) * self.sr)
+            blocksize=int((self.chunk_size / 1000) * self.sr),
+            samplerate=self.sr
         )
 
         with stream:
