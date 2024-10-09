@@ -5,6 +5,8 @@ from evdm.events import make_event
 from evdm.actors.core import Actor
 import sounddevice as sd
 import asyncio
+from collections import deque
+import numpy as np
 
 
 class MicrophoneListener(Actor):
@@ -54,6 +56,34 @@ class SpeakerPlayer(Actor):
 
         self.sr = None
         self.source = source
+        self.audio_buffer = deque()
+        self.buffer_ready = asyncio.Event()
+
+    async def play_audio(self):
+        def audio_callback(outdata, frames, time, status):
+            if len(self.audio_buffer) < frames:
+                outdata[:] = np.zeros((frames, 1), dtype="float32")
+            else:
+                for i in range(frames):
+                    outdata[i] = self.audio_buffer.popleft()
+
+        stream = sd.OutputStream(
+            samplerate=self.sr,
+            channels=1,
+            dtype="float32",
+            callback=audio_callback
+        )
+
+        with stream:
+            while True:
+                await self.buffer_ready.wait()
+                self.buffer_ready.clear()
+
+    def feed_audio(self, samples):
+        self.audio_buffer.extend(samples)
+
+        if len(self.audio_buffer) > self.sr * 0.3:
+            self.buffer_ready.set()
 
     async def act(self, event, heb):
         """
@@ -67,29 +97,10 @@ class SpeakerPlayer(Actor):
         if event.data["source"] != self.source:
             return
 
-        loop = asyncio.get_event_loop()
-        ev = asyncio.Event()
-        idx = 0
+        if self.sr == None:
+            self.sr = event.data["sr"]
 
-        self.sr = event.data["sr"]
+            asyncio.create_task(self.play_audio())
+
         samples = event.data["samples"]
-
-        def _callback(outdata, frame_count, time_info, status):
-            nonlocal idx
-            remainder = len(samples) - idx
-            if remainder == 0:
-                loop.call_soon_threadsafe(ev.set)
-                raise sd.CallbackStop
-            valid_frames = frame_count if remainder >= frame_count else remainder
-            outdata[:valid_frames] = samples[idx:idx + valid_frames]
-            outdata[valid_frames:] = 0
-            idx += valid_frames
-
-        stream = sd.OutputStream(
-            callback=_callback,
-            channels=1,
-            samplerate=self.sr
-        )
-
-        with stream:
-            await ev.wait()
+        self.feed_audio(samples)

@@ -25,9 +25,10 @@ class OpenAIRealtimeAgent(Actor):
 
     """
 
-    def __init__(self, prompt: str) -> None:
+    def __init__(self, prompt: str, source: str) -> None:
         super().__init__()
         self.prompt = prompt
+        self.source = source
 
         # Reference to the heb for emitting events. This is set at the first
         # call to `act`.
@@ -36,9 +37,7 @@ class OpenAIRealtimeAgent(Actor):
     async def connect(self):
         self.ws = await self._connect()
         await self._set_prompt()
-
-    async def start_loop(self):
-        await self._handle_server_events()
+        asyncio.create_task(self._handle_server_events())
 
     async def _connect(self):
         url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
@@ -193,7 +192,7 @@ class OpenAIRealtimeAgent(Actor):
         return samples.reshape(len(samples), 1) , sr
 
     async def act(self, event: Event, heb):
-        if event.data["source"].startswith("bot:"):
+        if event.data["source"] != self.source:
             return
 
         if self.heb is None:
