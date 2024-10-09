@@ -1,5 +1,7 @@
 # evdm
 
+![GitHub Tag](https://img.shields.io/github/v/tag/lepisma/evdm)
+
 Prototype of an [Hierarchical Event
 Bus](https://lepisma.xyz/2024/08/01/hierarchical-event-bus-for-spoken-conversational-systems/index.html)
 for building event driven speech conversational AI systems. Read the linked blog
