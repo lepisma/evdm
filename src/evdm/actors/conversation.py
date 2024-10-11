@@ -130,7 +130,7 @@ class OpenAIRealtimeAgent(Actor):
                 case "response.audio_transcript.delta":
                     pass
                 case "response.audio_transcript.done":
-                    logger.debug(f"Output text: {data['transcript']}")
+                    await self.handle_output_transcript(data)
                 case "response.audio.delta":
                     await self.handle_audio_delta(data)
                 case "response.audio.done":
@@ -144,6 +144,13 @@ class OpenAIRealtimeAgent(Actor):
 
     async def handle_error(self, message_data: dict):
         raise RuntimeError(f"Server error: {message_data}")
+
+    async def handle_output_transcript(self, message_data: dict):
+        await self.heb.put(make_event({
+            "source": "bot:oai-realtime",
+            "transcript": message_data["transcript"],
+            "is_eou": True
+        }), BusType.Texts)
 
     async def handle_input_transcript(self, message_data: dict):
         await self.heb.put(make_event({
