@@ -104,7 +104,7 @@ class OpenAIRealtimeAgent(Actor):
                 case "conversation.item.created":
                     pass
                 case "conversation.item.input_audio_transcription.completed":
-                    logger.debug(f"Input speech transcript: {data['transcript']}")
+                    await self.handle_input_transcript(data)
                 case "conversation.item.input_audio_transcription.failed":
                     pass
                 case "conversation.item.truncated":
@@ -132,7 +132,7 @@ class OpenAIRealtimeAgent(Actor):
                 case "response.audio_transcript.done":
                     logger.debug(f"Output text: {data['transcript']}")
                 case "response.audio.delta":
-                    await self.handle_audio_delta(data["delta"])
+                    await self.handle_audio_delta(data)
                 case "response.audio.done":
                     pass
                 case "response.function_call_arguments.delta":
@@ -145,8 +145,15 @@ class OpenAIRealtimeAgent(Actor):
     async def handle_error(self, message_data: dict):
         raise RuntimeError(f"Server error: {message_data}")
 
-    async def handle_audio_delta(self, encoded_audio: str):
-        samples, sr = await self.decode_audio(encoded_audio)
+    async def handle_input_transcript(self, message_data: dict):
+        await self.heb.put(make_event({
+            "source": "user",
+            "transcript": message_data["transcript"],
+            "is_eou": True
+        }), BusType.Texts)
+
+    async def handle_audio_delta(self, message_data: dict):
+        samples, sr = await self.decode_audio(message_data["delta"])
 
         await self.heb.put(make_event({
             "source": "bot:oai-realtime", "samples": samples, "sr": sr
