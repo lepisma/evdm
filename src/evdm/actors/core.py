@@ -22,6 +22,10 @@ class Actor(ABC):
         """
         raise NotImplementedError()
 
+    async def close(self):
+        """Shutdown sequence that's executed when the heb is closed."""
+        pass
+
 
 class DebugTap(Actor):
     """Actor that reads events on a bus and logs events at DEBUG level."""

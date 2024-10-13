@@ -2,6 +2,7 @@
 
 import asyncio
 from enum import Enum
+import itertools
 
 from evdm.events import Event
 
@@ -51,7 +52,12 @@ class HEB:
 
         self.listeners[listen_on].append(actor)
 
+    @property
+    def actors(self) -> list:
+        return list(itertools.chain(*self.listeners.values()))
+
     async def close(self):
         """Wait for all background tasks to finish before exiting."""
 
         await asyncio.gather(*self._background_tasks)
+        await asyncio.gather(*(a.close() for a in self.actors))
