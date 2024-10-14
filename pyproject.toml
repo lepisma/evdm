@@ -12,6 +12,8 @@ dependencies = [
     "ollama>=0.3.2",
     "aioconsole>=0.8.0",
     "websockets>=13.1",
+    "deepgram-sdk>=3.7.3",
+    "pyaudio>=0.2.14",
 ]
 
 [build-system]

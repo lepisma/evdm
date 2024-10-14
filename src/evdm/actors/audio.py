@@ -7,6 +7,9 @@ import sounddevice as sd
 import asyncio
 from collections import deque
 import numpy as np
+from deepgram import (DeepgramClient, LiveOptions, LiveTranscriptionEvents, Microphone)
+import os
+from loguru import logger
 
 
 class MicrophoneListener(Actor):
@@ -43,6 +46,129 @@ class MicrophoneListener(Actor):
                     "samples": indata,
                     "sr": self.sr
                 }), BusType.AudioSignals)
+
+
+class DeepgramTranscriber(Actor):
+    """Listen to audio from microphone directly and emit partial and complete
+    transcripts on Texts bus, optionally tagged with speaker id if diarization
+    is enabled.
+    """
+
+    def __init__(self, enable_diarization = False) -> None:
+        super().__init__()
+        self.enable_diarization = enable_diarization
+
+        api_key = os.getenv("DG_API_KEY")
+        if api_key is None:
+            raise RuntimeError("DG_API_KEY is not set")
+        self.client = DeepgramClient(api_key)
+        self.conn = None
+        self.accumulator = []
+        self.heb = None
+
+    async def act(self, event, heb):
+        """Take any event as the trigger to start listening. Once a connection
+        is established, ignore any further event's reading as trigger.
+        """
+
+        if self.conn:
+            return
+
+        if self.heb is None:
+            self.heb = heb
+
+
+        async def on_error(_self, error, **kwargs):
+            logger.error(kwargs["error"])
+
+
+        async def on_message(_self, result, **kwargs):
+            sentence = result.channel.alternatives[0].transcript
+
+            if len(sentence) == 0:
+                return
+
+            if result.is_final:
+                self.accumulator.append(sentence)
+
+                if result.speech_final:
+                    utterance = " ".join(self.accumulator)
+                    await self.heb.put(make_event({
+                        "source": "deepgram",
+                        "text": utterance,
+                        "is_eou": True,
+                        "is_final": True,
+                        "extra": result.to_json()
+                    }), BusType.Texts)
+                    self.accumulator = []
+                else:
+                    await self.heb.put(make_event({
+                        "source": "deepgram",
+                        "text": sentence,
+                        "is_eou": False,
+                        "is_final": True,
+                        "extra": result.to_json()
+                    }), BusType.Texts)
+            else:
+                await self.heb.put(make_event({
+                    "source": "deepgram",
+                    "text": sentence,
+                    "is_eou": False,
+                    "is_final": False,
+                    "extra": result.to_json()
+                }), BusType.Texts)
+
+
+        async def on_metadata(_self, metadata, **kwargs):
+            logger.debug(metadata)
+
+
+        async def on_speech_started(_self, speech_started, **kwargs):
+            logger.debug(speech_started)
+
+
+        async def on_utterance_end(_self, utterance_end, **kwargs):
+            utterance = " ".join(self.accumulator)
+            await self.heb.put(make_event({
+                "source": "deepgram",
+                "text": utterance,
+                "is_eou": True,
+                "is_final": True
+                # TODO: Also accumulate json
+            }), BusType.Texts)
+            self.accumulator = []
+
+
+        self.conn = self.client.listen.asyncwebsocket.v("1")
+
+        self.conn.on(LiveTranscriptionEvents.Transcript, on_message)
+        self.conn.on(LiveTranscriptionEvents.Metadata, on_metadata)
+        self.conn.on(LiveTranscriptionEvents.SpeechStarted, on_speech_started)
+        self.conn.on(LiveTranscriptionEvents.UtteranceEnd, on_utterance_end)
+        self.conn.on(LiveTranscriptionEvents.Error, on_error)
+
+        options = LiveOptions(
+            model="nova-2",
+            smart_format=True,
+            language="en-IN",
+            encoding="linear16",
+            channels=1,
+            sample_rate=24_000,
+            interim_results=True,
+            utterance_end_ms="1000",
+            vad_events=True,
+            diarize=self.enable_diarization
+        )
+
+        if await self.conn.start(options) is False:
+            raise RuntimeError(f"Failed to connect to Deepgram")
+
+        self.mic = Microphone(self.conn.send)
+        self.mic.start()
+
+    async def close(self):
+        self.mic.finish()
+        await self.conn.finish()
 
 
 class SpeakerPlayer(Actor):
