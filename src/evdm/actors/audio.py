@@ -1,5 +1,6 @@
 """In built actors with focus on Spoken Dialog Systems."""
 
+from itertools import filterfalse
 from evdm.bus import BusType
 from evdm.events import make_event
 from evdm.actors.core import Actor
@@ -54,17 +55,30 @@ class DeepgramTranscriber(Actor):
     is enabled.
     """
 
-    def __init__(self, enable_diarization = False) -> None:
+    def __init__(self, language: str, diarize = False) -> None:
         super().__init__()
-        self.enable_diarization = enable_diarization
 
         api_key = os.getenv("DG_API_KEY")
         if api_key is None:
             raise RuntimeError("DG_API_KEY is not set")
+
         self.client = DeepgramClient(api_key)
         self.conn = None
         self.accumulator = []
         self.heb = None
+        self.options = LiveOptions(
+            model="nova-2",
+            smart_format=True,
+            language=language,
+            encoding="linear16",
+            channels=1,
+            sample_rate=24_000,
+            interim_results=True,
+            utterance_end_ms="1000",
+            vad_events=True,
+            diarize=diarize
+        )
+
 
     async def act(self, event, heb):
         """Take any event as the trigger to start listening. Once a connection
@@ -147,20 +161,7 @@ class DeepgramTranscriber(Actor):
         self.conn.on(LiveTranscriptionEvents.UtteranceEnd, on_utterance_end)
         self.conn.on(LiveTranscriptionEvents.Error, on_error)
 
-        options = LiveOptions(
-            model="nova-2",
-            smart_format=True,
-            language="en-IN",
-            encoding="linear16",
-            channels=1,
-            sample_rate=24_000,
-            interim_results=True,
-            utterance_end_ms="1000",
-            vad_events=True,
-            diarize=self.enable_diarization
-        )
-
-        if await self.conn.start(options) is False:
+        if await self.conn.start(self.options) is False:
             raise RuntimeError(f"Failed to connect to Deepgram")
 
         self.mic = Microphone(self.conn.send)
