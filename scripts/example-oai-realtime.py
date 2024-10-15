@@ -5,9 +5,8 @@ half duplex voicebot
 
 from evdm.actors.audio import MicrophoneListener, SpeakerPlayer
 from evdm.actors.conversation import OpenAISpeechtoSpeechConvAgent
-from evdm.actors.core import DebugTap
 from evdm.bus import HEB, BusType
-from evdm.events import Event, make_event
+from evdm.events import make_event
 import asyncio
 
 
