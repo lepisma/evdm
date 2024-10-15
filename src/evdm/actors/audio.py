@@ -1,6 +1,5 @@
 """In built actors with focus on Spoken Dialog Systems."""
 
-from itertools import filterfalse
 from evdm.bus import BusType
 from evdm.events import make_event
 from evdm.actors.core import Actor
@@ -66,19 +65,8 @@ class DeepgramTranscriber(Actor):
         self.conn = None
         self.accumulator = []
         self.heb = None
-        self.options = LiveOptions(
-            model="nova-2",
-            smart_format=True,
-            language=language,
-            encoding="linear16",
-            channels=1,
-            sample_rate=24_000,
-            interim_results=True,
-            utterance_end_ms="1000",
-            vad_events=True,
-            diarize=diarize
-        )
-
+        self.language = language
+        self.diarize = diarize
 
     async def act(self, event, heb):
         """Take any event as the trigger to start listening. Once a connection
@@ -161,7 +149,20 @@ class DeepgramTranscriber(Actor):
         self.conn.on(LiveTranscriptionEvents.UtteranceEnd, on_utterance_end)
         self.conn.on(LiveTranscriptionEvents.Error, on_error)
 
-        if await self.conn.start(self.options) is False:
+        options = LiveOptions(
+            model="nova-2",
+            smart_format=True,
+            language=self.language,
+            encoding="linear16",
+            channels=1,
+            sample_rate=24_000,
+            interim_results=True,
+            utterance_end_ms="1000",
+            vad_events=True,
+            diarize=self.diarize
+        )
+
+        if await self.conn.start(options) is False:
             raise RuntimeError(f"Failed to connect to Deepgram")
 
         self.mic = Microphone(self.conn.send)
