@@ -4,7 +4,7 @@ half duplex voicebot
 """
 
 from evdm.actors.audio import MicrophoneListener, SpeakerPlayer
-from evdm.actors.conversation import OpenAIRealtimeAgent
+from evdm.actors.conversation import OpenAISpeechtoSpeechConvAgent
 from evdm.actors.core import DebugTap
 from evdm.bus import HEB, BusType
 from evdm.events import Event, make_event
@@ -15,7 +15,7 @@ async def main():
     heb = HEB()
 
     mic = MicrophoneListener(chunk_size=100, samplerate=24_000)
-    agent = OpenAIRealtimeAgent("You are a helpful agent", source="microphone")
+    agent = OpenAISpeechtoSpeechConvAgent("You are a helpful agent", source="microphone")
     await agent.connect()
 
     speaker = SpeakerPlayer(source="bot:oai-realtime")

@@ -16,7 +16,7 @@ import numpy as np
 import base64
 
 
-class OpenAIRealtimeAgent(Actor):
+class OpenAISpeechtoSpeechConvAgent(Actor):
     """Agent that uses OpenAI Realtime API for two-party conversations.
 
     This listens on Audio Signals bus (since we use server VAD mode from the
