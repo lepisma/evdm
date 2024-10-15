@@ -191,11 +191,11 @@ class OpenAITexttoSpeechConvAgent(Actor):
             if current_speaker == last_speaker:
                 accumulator.append(it["text"])
             else:
-                lines.append(f"speaker {last_speaker}: {' '.join(accumulator)}")
+                lines.append(f"speaker {last_speaker + 1}: {' '.join(accumulator)}")
                 accumulator = [it["text"]]
                 last_speaker = current_speaker
 
-        lines.append(f"speaker {last_speaker}: {' '.join(accumulator)}")
+        lines.append(f"speaker {last_speaker + 1}: {' '.join(accumulator)}")
 
         return "\n".join(lines)
 
