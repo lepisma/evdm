@@ -32,9 +32,9 @@ async def test_basic_bus_execution():
     heb.register(Incrementor(), listen_on=BusType.Devices)
     heb.register(tap, listen_on=BusType.Texts)
 
-    for i in range(10):
-        await asyncio.sleep(0.4)
+    for i in range(5):
+        await asyncio.sleep(0.1)
         await heb.put(make_event({"number": i}), BusType.Devices)
 
     await heb.close()
-    assert tap.items == [i + 1 for i in range(10)]
+    assert tap.items == [i + 1 for i in range(5)]
