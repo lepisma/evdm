@@ -16,7 +16,7 @@ async def main():
     agent = OpenAISpeechtoSpeechConvAgent("You are a helpful agent", source="microphone")
     await agent.connect()
 
-    speaker = SpeakerPlayer(source="bot:oai-realtime")
+    speaker = SpeakerPlayer(source="oai-realtime")
 
     heb.register(mic, listen_on=BusType.Devices)
     heb.register(agent, listen_on=BusType.AudioSignals)

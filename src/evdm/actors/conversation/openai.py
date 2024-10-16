@@ -1,4 +1,4 @@
-"""Actors related to conversation management."""
+"""Actors related to OpenAI based conversation management."""
 
 import asyncio
 
@@ -55,49 +55,71 @@ async def encode_audio(audio_samples, samplerate: int) -> str:
         return base64.b64encode(buffer.read()).decode("utf-8")
 
 
-class OpenAITexttoSpeechConvAgent(Actor, Emitter):
-    """Agent that uses OpenAI Realtime API for multi-party conversations by
-    sending text from user side and receiving audio from OpenAI.
+def build_diarized_transcript(data_items: list[dict]) -> str:
+    """Take word level transcription events and return stitched text for LLM
+    consumption while taking care of multi speaker transcripts.
     """
 
-    def __init__(self, prompt: str, source: str = "asr") -> None:
+    # First we figure out if diarization is happening
+    single_speaker = data_items[0]["speaker"] is None
+
+    if single_speaker:
+        return " ".join([it["text"] for it in data_items])
+
+    last_speaker = data_items[0]["speaker"]
+    lines = []
+    accumulator = []
+
+    for it in data_items:
+        current_speaker = it["speaker"]
+        if current_speaker == last_speaker:
+            accumulator.append(it["text"])
+        else:
+            lines.append(f"speaker {last_speaker + 1}: {' '.join(accumulator)}")
+            accumulator = [it["text"]]
+            last_speaker = current_speaker
+
+    lines.append(f"speaker {last_speaker + 1}: {' '.join(accumulator)}")
+
+    return "\n".join(lines)
+
+
+class OpenAIRealtimeBase(Actor, Emitter):
+    """Base class handling the realtime API. You should extend this and make
+    concrete versions.
+
+    The mandatory methods to implement are: `session_update` and `act`.
+    """
+
+    def __init__(self, prompt: str) -> None:
         super().__init__()
         self.prompt = prompt
-        self.source = source
-        self.accumulator = []
 
     async def connect(self):
-        self.ws = await self._connect()
-        await self._set_prompt()
-        asyncio.create_task(self._handle_server_events())
-
-    async def _connect(self):
         url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
         api_key = os.getenv("OPENAI_API_KEY")
 
         if api_key is None:
             raise ValueError("OPENAI_API_KEY not set.")
 
-        return await connect(url, additional_headers={
+        self.ws = await connect(url, additional_headers={
             "Authorization": "Bearer " + api_key,
             "OpenAI-Beta": "realtime=v1"
         })
 
-    async def _set_prompt(self):
-        await self.ws.send(json.dumps({
-            "type": "session.update",
-            "session": {
-                "modalities": ["text", "audio"],
-                "instructions": self.prompt,
-                "voice": "alloy",
-                "output_audio_format": "pcm16",
-                "tools": [],
-                "tool_choice": "none",
-                "temperature": 0.8
-            }
-        }))
+        await self.session_update()
+        asyncio.create_task(self.handle_server_events())
 
-    async def _handle_server_events(self):
+    async def session_update(self):
+        raise NotImplementedError()
+
+    async def act(self, event: Event):
+        raise NotImplementedError()
+
+    async def handle_error(self, message_data: dict):
+        raise RuntimeError(f"Server error: {message_data}")
+
+    async def handle_server_events(self):
         """Loop and listen to server events and then act accordingly. We ignore
         most of the events for now but we still 'handle' all to ensure that any
         upstream change doesn't blow up in our face.
@@ -126,7 +148,7 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
                 case "conversation.item.created":
                     logger.debug("Conversation item created")
                 case "conversation.item.input_audio_transcription.completed":
-                    pass
+                    await self.handle_input_transcript(data)
                 case "conversation.item.input_audio_transcription.failed":
                     pass
                 case "conversation.item.truncated":
@@ -164,19 +186,23 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
                 case "rate_limits.updated":
                     pass
 
-    async def handle_error(self, message_data: dict):
-        raise RuntimeError(f"Server error: {message_data}")
-
     async def handle_output_text(self, message_data: dict):
         await self.emit(make_event(BusType.Texts, {
-            "source": "bot:oai-realtime",
+            "source": "oai-realtime",
             "text": message_data["text"],
             "is_eou": True
         }))
 
     async def handle_output_transcript(self, message_data: dict):
         await self.emit(make_event(BusType.Texts, {
-            "source": "bot:oai-realtime-transcript",
+            "source": "oai-realtime-transcript",
+            "text": message_data["transcript"],
+            "is_eou": True
+        }))
+
+    async def handle_input_transcript(self, message_data: dict):
+        await self.emit(make_event(BusType.Texts, {
+            "source": "oai-input-asr",
             "text": message_data["transcript"],
             "is_eou": True
         }))
@@ -185,34 +211,35 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
         samples, sr = await decode_audio(message_data["delta"])
 
         await self.emit(make_event(BusType.AudioSignals, {
-            "source": "bot:oai-realtime", "samples": samples, "sr": sr
+            "source": "oai-realtime",
+            "samples": samples,
+            "sr": sr
         }))
 
-    def build_diarized_transcript(self, data_items: list[dict]) -> str:
-        # First we figure out if diarization is happening
-        single_speaker = data_items[0]["speaker"] is None
 
-        if single_speaker:
-            return " ".join([it["text"] for it in data_items])
+class OpenAITexttoSpeechConvAgent(OpenAIRealtimeBase):
+    """Agent that uses OpenAI Realtime API for multi-party conversations by
+    sending text from user side and receiving audio from OpenAI.
+    """
 
-        # HACK: This way of tagging speakers will change
-        last_speaker = data_items[0]["speaker"]
+    def __init__(self, prompt: str, source: str = "asr") -> None:
+        super().__init__(prompt)
+        self.source = source
+        self.accumulator = []
 
-        lines = []
-        accumulator = []
-
-        for it in data_items:
-            current_speaker = it["speaker"]
-            if current_speaker == last_speaker:
-                accumulator.append(it["text"])
-            else:
-                lines.append(f"speaker {last_speaker + 1}: {' '.join(accumulator)}")
-                accumulator = [it["text"]]
-                last_speaker = current_speaker
-
-        lines.append(f"speaker {last_speaker + 1}: {' '.join(accumulator)}")
-
-        return "\n".join(lines)
+    async def session_update(self):
+        await self.ws.send(json.dumps({
+            "type": "session.update",
+            "session": {
+                "modalities": ["text", "audio"],
+                "instructions": self.prompt,
+                "voice": "alloy",
+                "output_audio_format": "pcm16",
+                "tools": [],
+                "tool_choice": "none",
+                "temperature": 0.8
+            }
+        }))
 
     async def act(self, event: Event):
         if event.data["source"] != self.source:
@@ -220,7 +247,7 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
 
         if "signal" in event.data:
             if event.data["signal"] == "eou":
-                transcript = self.build_diarized_transcript(self.accumulator)
+                transcript = build_diarized_transcript(self.accumulator)
                 self.accumulator = []
 
                 await self.ws.send(json.dumps({
@@ -245,38 +272,19 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
             self.accumulator.append(event.data)
 
 
-class OpenAISpeechtoSpeechConvAgent(Actor, Emitter):
+class OpenAISpeechtoSpeechConvAgent(OpenAIRealtimeBase):
     """Agent that uses OpenAI Realtime API for two-party conversations.
 
     This listens on Audio Signals bus (since we use server VAD mode from the
     API) and emits to Audio Signals (output audio) and Lexical Segments
     (transcripts) bus.
-
     """
 
-    def __init__(self,  prompt: str, source: str) -> None:
-        super().__init__()
-        self.prompt = prompt
+    def __init__(self, prompt: str, source: str) -> None:
+        super().__init__(prompt)
         self.source = source
 
-    async def connect(self):
-        self.ws = await self._connect()
-        await self._set_prompt()
-        asyncio.create_task(self._handle_server_events())
-
-    async def _connect(self):
-        url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01"
-        api_key = os.getenv("OPENAI_API_KEY")
-
-        if api_key is None:
-            raise ValueError("OPENAI_API_KEY not set.")
-
-        return await connect(url, additional_headers={
-            "Authorization": "Bearer " + api_key,
-            "OpenAI-Beta": "realtime=v1"
-        })
-
-    async def _set_prompt(self):
+    async def session_update(self):
         await self.ws.send(json.dumps({
             "type": "session.update",
             "session": {
@@ -298,104 +306,6 @@ class OpenAISpeechtoSpeechConvAgent(Actor, Emitter):
                 "tool_choice": "none",
                 "temperature": 0.8
             }
-        }))
-
-    async def _handle_server_events(self):
-        """Loop and listen to server events and then act accordingly. We ignore
-        most of the events for now but we still 'handle' all to ensure that any
-        upstream change doesn't blow up in our face.
-        """
-
-        async for message in self.ws:
-            data = json.loads(message)
-
-            match data["type"]:
-                case "error":
-                    await self.handle_error(data)
-                case "session.created":
-                    logger.debug("Session created.")
-                case "session.updated":
-                    pass
-                case "conversation.created":
-                    pass
-                case "input_audio_buffer.committed":
-                    pass
-                case "input_audio_buffer.cleared":
-                    pass
-                case "input_audio_buffer.speech_started":
-                    logger.debug("Input speech started")
-                case "input_audio_buffer.speech_stopped":
-                    logger.debug("Input speech stopped")
-                case "conversation.item.created":
-                    pass
-                case "conversation.item.input_audio_transcription.completed":
-                    await self.handle_input_transcript(data)
-                case "conversation.item.input_audio_transcription.failed":
-                    pass
-                case "conversation.item.truncated":
-                    pass
-                case "conversation.item.deleted":
-                    pass
-                case "response.created":
-                    pass
-                case "response.done":
-                    pass
-                case "response.output_item.added":
-                    pass
-                case "response.output_item.done":
-                    pass
-                case "response.content_part.added":
-                    pass
-                case "response.content_part.done":
-                    pass
-                case "response.text.delta":
-                    pass
-                case "response.text.done":
-                    await self.handle_output_text(data)
-                case "response.audio_transcript.delta":
-                    pass
-                case "response.audio_transcript.done":
-                    await self.handle_output_transcript(data)
-                case "response.audio.delta":
-                    await self.handle_audio_delta(data)
-                case "response.audio.done":
-                    pass
-                case "response.function_call_arguments.delta":
-                    pass
-                case "response.function_call_arguments.done":
-                    pass
-                case "rate_limits.updated":
-                    pass
-
-    async def handle_error(self, message_data: dict):
-        raise RuntimeError(f"Server error: {message_data}")
-
-    async def handle_output_text(self, message_data: dict):
-        await self.emit(make_event(BusType.Texts, {
-            "source": "bot:oai-realtime",
-            "text": message_data["text"],
-            "is_eou": True
-        }))
-
-    async def handle_output_transcript(self, message_data: dict):
-        await self.emit(make_event(BusType.Texts, {
-            "source": "bot:oai-realtime-transcript",
-            "text": message_data["transcript"],
-            "is_eou": True
-        }))
-
-    async def handle_input_transcript(self, message_data: dict):
-        await self.emit(make_event(BusType.Texts, {
-            "source": "user",
-            "text": message_data["transcript"],
-            "is_eou": True
-        }))
-
-    async def handle_audio_delta(self, message_data: dict):
-        samples, sr = await decode_audio(message_data["delta"])
-
-        await self.emit(make_event(BusType.AudioSignals, {
-            "source": "bot:oai-realtime", "samples": samples, "sr": sr
         }))
 
     async def act(self, event: Event):
