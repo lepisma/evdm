@@ -4,7 +4,8 @@ import asyncio
 from enum import Enum
 import itertools
 
-from evdm.events import Event
+from dataclasses import dataclass
+from datetime import datetime
 
 
 class BusType(Enum):
@@ -16,6 +17,17 @@ class BusType(Enum):
     AudioSegments = 4
     AudioSignals = 5
     Devices = 6
+
+
+@dataclass
+class Event:
+    """Event that runs on the buses."""
+    created_on: datetime
+    data: dict
+
+
+def make_event(data: dict) -> Event:
+    return Event(datetime.now(), data)
 
 
 class HEB:

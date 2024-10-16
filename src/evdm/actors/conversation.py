@@ -3,8 +3,7 @@
 import asyncio
 
 from evdm.actors.core import Actor
-from evdm.bus import BusType
-from evdm.events import Event, make_event
+from evdm.bus import BusType, Event, make_event
 import ollama
 import os
 import json

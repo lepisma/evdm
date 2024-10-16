@@ -1,8 +1,7 @@
 """Base actors and utilities."""
 
 from abc import abstractmethod, ABC
-from evdm.bus import BusType
-from evdm.events import Event
+from evdm.bus import BusType, Event
 
 from loguru import logger
 

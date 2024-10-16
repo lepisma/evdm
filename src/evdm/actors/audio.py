@@ -1,7 +1,6 @@
 """In built actors with focus on Spoken Dialog Systems."""
 
-from evdm.bus import BusType
-from evdm.events import make_event
+from evdm.bus import BusType, make_event
 from evdm.actors.core import Actor
 import sounddevice as sd
 import asyncio
