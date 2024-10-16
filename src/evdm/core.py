@@ -89,6 +89,13 @@ class HEB:
             self._background_tasks.add(task)
             task.add_done_callback(self._background_tasks.discard)
 
+    async def trigger(self, bus: BusType):
+        """
+        Generate a dummy trigger event on a bus.
+        """
+
+        await self.emit(make_event(bus, {}))
+
     def register(self, actor: "Actor", listen_on: BusType):
         """Register `actor` to listen on all events that come on given bus."""
 
