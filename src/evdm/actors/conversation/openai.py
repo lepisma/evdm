@@ -13,6 +13,48 @@ import numpy as np
 import base64
 
 
+async def decode_audio(data: str):
+    """Decode base64 audio `data` that's in raw PCM_16 little endian format to
+    samples and sampling rate.
+    """
+
+    # This is the default for the API
+    sr = 24_000
+
+    binary_data = base64.b64decode(data)
+
+    def _read(buffer):
+        with sf.SoundFile(buffer, "r", format="RAW", samplerate=sr, channels=1, subtype="PCM_16", endian="LITTLE") as fp:
+            return fp.read()
+
+    with io.BytesIO(binary_data) as buffer:
+        loop = asyncio.get_event_loop()
+        samples = await loop.run_in_executor(None, lambda: _read(buffer))
+
+    samples = samples.astype(np.float32)
+    return samples.reshape(len(samples), 1), sr
+
+
+async def encode_audio(audio_samples, samplerate: int) -> str:
+    """Encode audio to base64 encoded binary format that's acceptable via
+    the API.
+    """
+
+    # HACK since they are allowing only this sampling rate right now
+    assert samplerate == 24_000
+
+    def _write(buffer, samples, sr: int):
+        with sf.SoundFile(buffer, "w", format="RAW", samplerate=sr, channels=1, subtype="PCM_16", endian="LITTLE") as fp:
+            fp.write(samples)
+
+    with io.BytesIO() as buffer:
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, lambda: _write(buffer, audio_samples, samplerate))
+
+        buffer.seek(0)
+        return base64.b64encode(buffer.read()).decode("utf-8")
+
+
 class OpenAITexttoSpeechConvAgent(Actor, Emitter):
     """Agent that uses OpenAI Realtime API for multi-party conversations by
     sending text from user side and receiving audio from OpenAI.
@@ -140,31 +182,11 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
         }))
 
     async def handle_audio_delta(self, message_data: dict):
-        samples, sr = await self.decode_audio(message_data["delta"])
+        samples, sr = await decode_audio(message_data["delta"])
 
         await self.emit(make_event(BusType.AudioSignals, {
             "source": "bot:oai-realtime", "samples": samples, "sr": sr
         }))
-
-    async def decode_audio(self, data: str):
-        """Decode base64 audio `data` that's in raw PCM_16 little endian format
-        to samples and sampling rate."""
-
-        # This is the default for the API
-        sr = 24_000
-
-        binary_data = base64.b64decode(data)
-
-        def _read(buffer):
-            with sf.SoundFile(buffer, "r", format="RAW", samplerate=sr, channels=1, subtype="PCM_16", endian="LITTLE") as fp:
-                return fp.read()
-
-        with io.BytesIO(binary_data) as buffer:
-            loop = asyncio.get_event_loop()
-            samples = await loop.run_in_executor(None, lambda: _read(buffer))
-
-        samples = samples.astype(np.float32)
-        return samples.reshape(len(samples), 1) , sr
 
     def build_diarized_transcript(self, data_items: list[dict]) -> str:
         # First we figure out if diarization is happening
@@ -370,50 +392,11 @@ class OpenAISpeechtoSpeechConvAgent(Actor, Emitter):
         }))
 
     async def handle_audio_delta(self, message_data: dict):
-        samples, sr = await self.decode_audio(message_data["delta"])
+        samples, sr = await decode_audio(message_data["delta"])
 
         await self.emit(make_event(BusType.AudioSignals, {
             "source": "bot:oai-realtime", "samples": samples, "sr": sr
         }))
-
-    async def encode_audio(self, audio_samples, samplerate: int) -> str:
-        """Encode audio to base64 encoded binary format that's acceptable via
-        the API.
-        """
-
-        # HACK since they are allowing only this sampling rate right now
-        assert samplerate == 24_000
-
-        def _write(buffer, samples, sr: int):
-            with sf.SoundFile(buffer, "w", format="RAW", samplerate=sr, channels=1, subtype="PCM_16", endian="LITTLE") as fp:
-                fp.write(samples)
-
-        with io.BytesIO() as buffer:
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, lambda: _write(buffer, audio_samples, samplerate))
-
-            buffer.seek(0)
-            return base64.b64encode(buffer.read()).decode("utf-8")
-
-    async def decode_audio(self, data: str):
-        """Decode base64 audio `data` that's in raw PCM_16 little endian format
-        to samples and sampling rate."""
-
-        # This is the default for the API
-        sr = 24_000
-
-        binary_data = base64.b64decode(data)
-
-        def _read(buffer):
-            with sf.SoundFile(buffer, "r", format="RAW", samplerate=sr, channels=1, subtype="PCM_16", endian="LITTLE") as fp:
-                return fp.read()
-
-        with io.BytesIO(binary_data) as buffer:
-            loop = asyncio.get_event_loop()
-            samples = await loop.run_in_executor(None, lambda: _read(buffer))
-
-        samples = samples.astype(np.float32)
-        return samples.reshape(len(samples), 1) , sr
 
     async def act(self, event: Event):
         if event.data["source"] != self.source:
@@ -422,7 +405,7 @@ class OpenAISpeechtoSpeechConvAgent(Actor, Emitter):
         sr = event.data["sr"]
         samples = event.data["samples"]
 
-        encoded_audio = await self.encode_audio(samples, sr)
+        encoded_audio = await encode_audio(samples, sr)
 
         await self.ws.send(json.dumps({
             "type": "input_audio_buffer.append",
