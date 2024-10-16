@@ -1,7 +1,6 @@
 """In built actors with focus on Spoken Dialog Systems."""
 
-from evdm.bus import BusType, make_event
-from evdm.actors.core import Actor
+from evdm.core import Actor, Emitter, BusType, make_event
 import sounddevice as sd
 import asyncio
 from collections import deque
@@ -11,7 +10,7 @@ import os
 from loguru import logger
 
 
-class MicrophoneListener(Actor):
+class MicrophoneListener(Actor, Emitter):
     """Actor that reads audio chunks from microphone directly (not via Device
     bus) and puts events on the AudioSignals bus.
     """
@@ -20,10 +19,12 @@ class MicrophoneListener(Actor):
         """`chunk_size` tells the size of each emitted chunk in ms. You could
         get a lower sized chunk when the source has stopped emitting audio.
         """
+        super().__init__()
+
         self.sr = samplerate
         self.chunk_size = chunk_size
 
-    async def act(self, event, heb):
+    async def act(self, event):
         q = asyncio.Queue()
         loop = asyncio.get_event_loop()
 
@@ -39,15 +40,15 @@ class MicrophoneListener(Actor):
 
         with stream:
             while True:
-                indata, status = await q.get()
-                await heb.put(make_event({
+                indata, _ = await q.get()
+                await self.emit(make_event(BusType.AudioSignals, {
                     "source": "microphone",
                     "samples": indata,
                     "sr": self.sr
-                }), BusType.AudioSignals)
+                }))
 
 
-class DeepgramTranscriber(Actor):
+class DeepgramTranscriber(Actor, Emitter):
     """Listen to audio from microphone directly and emit tokens on Texts bus,
     optionally tagged with speaker id if diarization is enabled.
 
@@ -64,20 +65,16 @@ class DeepgramTranscriber(Actor):
 
         self.client = DeepgramClient(api_key)
         self.conn = None
-        self.heb = None
         self.language = language
         self.diarize = diarize
 
-    async def act(self, event, heb):
+    async def act(self, event):
         """Take any event as the trigger to start listening. Once a connection
         is established, ignore any further event's reading as trigger.
         """
 
         if self.conn:
             return
-
-        if self.heb is None:
-            self.heb = heb
 
         async def on_error(_self, error, **kwargs):
             logger.error(kwargs["error"])
@@ -88,14 +85,14 @@ class DeepgramTranscriber(Actor):
                 return
 
             for word in alt.words:
-                await self.heb.put(make_event({
+                await self.emit(make_event(BusType.Texts, {
                     "source": f"deepgram:spk{word.speaker}" if self.diarize else "deepgram",
                     "text": word.punctuated_word,
                     "is_final": result.is_final,
                     "start": word.start,
                     "end": word.end,
                     "confidence": word.confidence
-                }), BusType.Texts)
+                }))
 
         async def on_metadata(_self, metadata, **kwargs):
             logger.debug(metadata)
@@ -104,10 +101,10 @@ class DeepgramTranscriber(Actor):
             logger.debug(speech_started)
 
         async def on_utterance_end(_self, utterance_end, **kwargs):
-            await self.heb.put(make_event({
+            await self.emit(make_event(BusType.Semantics, {
                 "source": "deepgram",
                 "signal": "eou",
-            }), BusType.Semantics)
+            }))
 
         self.conn = self.client.listen.asyncwebsocket.v("1")
 
@@ -149,7 +146,7 @@ class SpeakerPlayer(Actor):
     def __init__(self, source: str) -> None:
         """Only play audio from the given `source` name on Audio Signals bus.
         """
-
+        super().__init__()
         self.sr = None
         self.source = source
         self.audio_buffer = deque()
@@ -181,7 +178,7 @@ class SpeakerPlayer(Actor):
         if len(self.audio_buffer) > self.sr * 0.3:
             self.buffer_ready.set()
 
-    async def act(self, event, heb):
+    async def act(self, event):
         """
         Event's `data` structure is like the following:
 

@@ -2,8 +2,7 @@
 
 import asyncio
 
-from evdm.actors.core import Actor
-from evdm.bus import BusType, Event, make_event
+from evdm.core import BusType, Event, make_event, Actor, Emitter
 import ollama
 import os
 import json
@@ -15,7 +14,7 @@ import numpy as np
 import base64
 
 
-class OpenAITexttoSpeechConvAgent(Actor):
+class OpenAITexttoSpeechConvAgent(Actor, Emitter):
     """Agent that uses OpenAI Realtime API for multi-party conversations by
     sending text from user side and receiving audio from OpenAI.
     """
@@ -24,10 +23,6 @@ class OpenAITexttoSpeechConvAgent(Actor):
         super().__init__()
         self.prompt = prompt
         self.source = source
-
-        # Reference to the heb for emitting events. This is set at the first
-        # call to `act`.
-        self.heb = None
         self.accumulator = []
 
     async def connect(self):
@@ -132,25 +127,25 @@ class OpenAITexttoSpeechConvAgent(Actor):
         raise RuntimeError(f"Server error: {message_data}")
 
     async def handle_output_text(self, message_data: dict):
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.Texts, {
             "source": "bot:oai-realtime",
             "text": message_data["text"],
             "is_eou": True
-        }), BusType.Texts)
+        }))
 
     async def handle_output_transcript(self, message_data: dict):
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.Texts, {
             "source": "bot:oai-realtime-transcript",
             "text": message_data["transcript"],
             "is_eou": True
-        }), BusType.Texts)
+        }))
 
     async def handle_audio_delta(self, message_data: dict):
         samples, sr = await self.decode_audio(message_data["delta"])
 
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.AudioSignals, {
             "source": "bot:oai-realtime", "samples": samples, "sr": sr
-        }), BusType.AudioSignals)
+        }))
 
     async def decode_audio(self, data: str):
         """Decode base64 audio `data` that's in raw PCM_16 little endian format
@@ -198,12 +193,9 @@ class OpenAITexttoSpeechConvAgent(Actor):
 
         return "\n".join(lines)
 
-    async def act(self, event: Event, heb):
+    async def act(self, event: Event):
         if not event.data["source"].startswith(self.source):
             return
-
-        if self.heb is None:
-            self.heb = heb
 
         if "signal" in event.data:
             if event.data["signal"] == "eou":
@@ -232,7 +224,7 @@ class OpenAITexttoSpeechConvAgent(Actor):
             self.accumulator.append(event.data)
 
 
-class OpenAISpeechtoSpeechConvAgent(Actor):
+class OpenAISpeechtoSpeechConvAgent(Actor, Emitter):
     """Agent that uses OpenAI Realtime API for two-party conversations.
 
     This listens on Audio Signals bus (since we use server VAD mode from the
@@ -241,14 +233,10 @@ class OpenAISpeechtoSpeechConvAgent(Actor):
 
     """
 
-    def __init__(self, prompt: str, source: str) -> None:
+    def __init__(self,  prompt: str, source: str) -> None:
         super().__init__()
         self.prompt = prompt
         self.source = source
-
-        # Reference to the heb for emitting events. This is set at the first
-        # call to `act`.
-        self.heb = None
 
     async def connect(self):
         self.ws = await self._connect()
@@ -362,32 +350,32 @@ class OpenAISpeechtoSpeechConvAgent(Actor):
         raise RuntimeError(f"Server error: {message_data}")
 
     async def handle_output_text(self, message_data: dict):
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.Texts, {
             "source": "bot:oai-realtime",
             "text": message_data["text"],
             "is_eou": True
-        }), BusType.Texts)
+        }))
 
     async def handle_output_transcript(self, message_data: dict):
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.Texts, {
             "source": "bot:oai-realtime-transcript",
             "text": message_data["transcript"],
             "is_eou": True
-        }), BusType.Texts)
+        }))
 
     async def handle_input_transcript(self, message_data: dict):
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.Texts, {
             "source": "user",
             "text": message_data["transcript"],
             "is_eou": True
-        }), BusType.Texts)
+        }))
 
     async def handle_audio_delta(self, message_data: dict):
         samples, sr = await self.decode_audio(message_data["delta"])
 
-        await self.heb.put(make_event({
+        await self.emit(make_event(BusType.AudioSignals, {
             "source": "bot:oai-realtime", "samples": samples, "sr": sr
-        }), BusType.AudioSignals)
+        }))
 
     async def encode_audio(self, audio_samples, samplerate: int) -> str:
         """Encode audio to base64 encoded binary format that's acceptable via
@@ -428,12 +416,9 @@ class OpenAISpeechtoSpeechConvAgent(Actor):
         samples = samples.astype(np.float32)
         return samples.reshape(len(samples), 1) , sr
 
-    async def act(self, event: Event, heb):
+    async def act(self, event: Event):
         if event.data["source"] != self.source:
             return
-
-        if self.heb is None:
-            self.heb = heb
 
         sr = event.data["sr"]
         samples = event.data["samples"]
@@ -446,43 +431,7 @@ class OpenAISpeechtoSpeechConvAgent(Actor):
         }))
 
 
-class BackchannelDetectorAgent(Actor):
-    """Agent that detects backchannel events on text bus and emits on semantics bus.
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-
-    async def act(self, event: Event, heb):
-        """There are the following kinds of backchannels that this detects (per speaker):
-
-        1. Interruptions that need the current speaker to yield.
-
-        2. Background events that need to be acknowledged but don't need to be
-           read as interruptions. They could be read as things that we need to do.
-
-        """
-
-        # Detect who all is currently speaking
-        # Run the detector on the partial text
-        # Emit the backchannel prediction on semantic bus
-        # This is complete specification for this actor
-
-        pass
-
-
-class ConversationalMemory(Actor):
-    """Memory for all conversation events. This saves all events from semantic
-    bus and superset utterances from text bus."""
-
-    def __init__(self) -> None:
-        super().__init__()
-
-    async def act(self, event: Event, heb):
-        pass
-
-
-class LLMConversationAgent(Actor):
+class LLMConversationAgent(Actor, Emitter):
     """
     LLM Conversational Agent that responds to events from text bus.
     """
@@ -496,7 +445,7 @@ class LLMConversationAgent(Actor):
         self.history: list[ollama.Message] = []
         self.model = "gemma2:2b"
 
-    async def act(self, event: Event, heb):
+    async def act(self, event: Event):
         """Structure of `event.data`:
 
         - `source`: Label for the speaker
@@ -538,8 +487,8 @@ class LLMConversationAgent(Actor):
                 self.history.append({"role": "assistant", "content": "".join(accumulated_text)})
                 accumulated_text = []
 
-            await heb.put(make_event({
+            await self.emit(make_event(BusType.Texts, {
                 "source": "bot:ollama",
                 "is-eou": part["done"],
                 "text": "".join(accumulated_text)
-            }), BusType.Texts)
+            }))

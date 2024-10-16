@@ -5,8 +5,7 @@ half duplex voicebot
 
 from evdm.actors.audio import MicrophoneListener, SpeakerPlayer
 from evdm.actors.conversation import OpenAISpeechtoSpeechConvAgent
-from evdm.bus import HEB, BusType
-from evdm.events import make_event
+from evdm.core import HEB, BusType, make_event
 import asyncio
 
 
@@ -23,7 +22,7 @@ async def main():
     heb.register(agent, listen_on=BusType.AudioSignals)
     heb.register(speaker, listen_on=BusType.AudioSignals)
 
-    await heb.put(make_event({}), BusType.Devices)
+    await heb.emit(make_event(BusType.Devices, {}))
     await heb.close()
 
 asyncio.run(main())
