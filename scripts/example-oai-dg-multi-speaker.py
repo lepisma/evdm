@@ -13,7 +13,7 @@ async def main():
     heb = HEB()
 
     dg = DeepgramTranscriber("en-IN", diarize=True)
-    oai = OpenAITexttoSpeechConvAgent("You are a helpful agent. You will be talking to 1 or more people whose utterances will be prefixed with 'speaker <id>'.", "deepgram")
+    oai = OpenAITexttoSpeechConvAgent("You are a helpful agent. You will be talking to 1 or more people whose utterances will be prefixed with 'speaker <id>'.")
     await oai.connect()
 
     speaker = SpeakerPlayer(source="bot:oai-realtime")

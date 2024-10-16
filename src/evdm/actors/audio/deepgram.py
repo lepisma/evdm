@@ -12,7 +12,11 @@ class DeepgramTranscriber(Actor, Emitter):
     last EoU or start should be counted as utterance.
     """
 
-    def __init__(self, language: str, diarize = False) -> None:
+    def __init__(self, language: str, diarize = False, label = "asr") -> None:
+        """
+        `label` is used in the 'source' field of emitted events.
+        """
+
         super().__init__()
 
         api_key = os.getenv("DG_API_KEY")
@@ -23,6 +27,7 @@ class DeepgramTranscriber(Actor, Emitter):
         self.conn = None
         self.language = language
         self.diarize = diarize
+        self.label = label
 
     async def act(self, event):
         """Take any event as the trigger to start listening. Once a connection
@@ -42,7 +47,8 @@ class DeepgramTranscriber(Actor, Emitter):
 
             for word in alt.words:
                 await self.emit(make_event(BusType.Texts, {
-                    "source": f"deepgram:spk{word.speaker}" if self.diarize else "deepgram",
+                    "source": self.label,
+                    "speaker": word.speaker if self.diarize else None,
                     "text": word.punctuated_word,
                     "is_final": result.is_final,
                     "start": word.start,
@@ -58,7 +64,7 @@ class DeepgramTranscriber(Actor, Emitter):
 
         async def on_utterance_end(_self, utterance_end, **kwargs):
             await self.emit(make_event(BusType.Semantics, {
-                "source": "deepgram",
+                "source": self.label,
                 "signal": "eou",
             }))
 

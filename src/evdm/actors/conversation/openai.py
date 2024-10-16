@@ -18,7 +18,7 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
     sending text from user side and receiving audio from OpenAI.
     """
 
-    def __init__(self, prompt: str, source: str) -> None:
+    def __init__(self, prompt: str, source: str = "asr") -> None:
         super().__init__()
         self.prompt = prompt
         self.source = source
@@ -167,20 +167,20 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
         return samples.reshape(len(samples), 1) , sr
 
     def build_diarized_transcript(self, data_items: list[dict]) -> str:
-        # First we figure out if diarization is present
-        single_speaker = data_items[0]["source"] == self.source
+        # First we figure out if diarization is happening
+        single_speaker = data_items[0]["speaker"] is None
 
         if single_speaker:
             return " ".join([it["text"] for it in data_items])
 
         # HACK: This way of tagging speakers will change
-        last_speaker = int(data_items[0]["source"].split(":spk")[1])
+        last_speaker = data_items[0]["speaker"]
 
         lines = []
         accumulator = []
 
         for it in data_items:
-            current_speaker = int(it["source"].split(":spk")[1])
+            current_speaker = it["speaker"]
             if current_speaker == last_speaker:
                 accumulator.append(it["text"])
             else:
@@ -193,7 +193,7 @@ class OpenAITexttoSpeechConvAgent(Actor, Emitter):
         return "\n".join(lines)
 
     async def act(self, event: Event):
-        if not event.data["source"].startswith(self.source):
+        if event.data["source"] != self.source:
             return
 
         if "signal" in event.data:
