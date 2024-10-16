@@ -1,7 +1,7 @@
 [project]
 name = "evdm"
-version = "0.3.0"
-description = ""
+version = "0.3.1"
+description = "Prototype of a Hierarchical Event Bus for building event driven speech conversational AI systems"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
