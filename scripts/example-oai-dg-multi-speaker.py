@@ -16,7 +16,7 @@ async def main():
     oai = OpenAITexttoSpeechConvAgent("You are a helpful agent. You will be talking to 1 or more people whose utterances will be prefixed with 'speaker <id>'.")
     await oai.connect()
 
-    speaker = SpeakerPlayer(source="bot:oai-realtime")
+    speaker = SpeakerPlayer(source="oai-realtime")
 
     heb.register(dg, listen_on=BusType.Devices)
     heb.register(oai, listen_on=BusType.Texts)
